@@ -1,0 +1,59 @@
+{
+  "name": "testr",
+  "displayName": "Testr",
+  "description": "A fast and efficient test runner for Visual Studio Code. Run all tests or individual tests with a single click.",
+  "version": "0.0.1",
+  "publisher": "testr",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing"
+  ],
+  "keywords": [
+    "test",
+    "testing",
+    "jest",
+    "test runner",
+    "test explorer"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/test/**",
+    "workspaceContains:**/__tests__/**",
+    "workspaceContains:**/*.test.ts",
+    "workspaceContains:**/*.spec.ts",
+    "workspaceContains:**/*.test.js",
+    "workspaceContains:**/*.spec.js"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "testr.runAllTests",
+        "title": "Testr: Run All Tests",
+        "icon": "$(play)"
+      },
+      {
+        "command": "testr.refreshTests",
+        "title": "Testr: Refresh Tests",
+        "icon": "$(refresh)"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2"
+  }
+}
