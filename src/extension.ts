@@ -3,6 +3,7 @@ import { TestDiscoveryManager } from './discovery/TestDiscoveryManager';
 import { TestExecutionManager } from './execution/TestExecutionManager';
 import { AdapterRegistry } from './adapters/AdapterRegistry';
 import { JestAdapter } from './adapters/jest/JestAdapter';
+import { PhpunitAdapter } from './adapters/phpunit/PhpunitAdapter';
 import { StatusBarManager } from './ui/StatusBarManager';
 import { OutputLogger } from './ui/OutputLogger';
 
@@ -22,6 +23,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     adapterRegistry = new AdapterRegistry();
     adapterRegistry.registerAdapter(new JestAdapter(outputLogger));
+    adapterRegistry.registerAdapter(new PhpunitAdapter(outputLogger));
 
     statusBarManager = new StatusBarManager();
     context.subscriptions.push(statusBarManager);

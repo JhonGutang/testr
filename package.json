@@ -3,7 +3,7 @@
   "displayName": "Testr",
   "description": "A fast and efficient test runner for Visual Studio Code. Run all tests or individual tests with a single click.",
   "version": "0.0.1",
-  "publisher": "testr",
+  "publisher": "jbg-dev",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -23,7 +23,10 @@
     "workspaceContains:**/*.test.ts",
     "workspaceContains:**/*.spec.ts",
     "workspaceContains:**/*.test.js",
-    "workspaceContains:**/*.spec.js"
+    "workspaceContains:**/*.spec.js",
+    "workspaceContains:**/*Test.php",
+    "workspaceContains:**/phpunit.xml",
+    "workspaceContains:**/phpunit.xml.dist"
   ],
   "main": "./out/extension.js",
   "contributes": {

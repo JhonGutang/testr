@@ -4,6 +4,7 @@ A fast and efficient test runner for Visual Studio Code.
 
 ![Testr](https://img.shields.io/badge/VS%20Code-Extension-blue)
 ![Jest](https://img.shields.io/badge/Framework-Jest-green)
+![PHPUnit](https://img.shields.io/badge/Framework-PHPUnit-blue)
 
 ## Features
 
@@ -11,6 +12,7 @@ A fast and efficient test runner for Visual Studio Code.
 - **Organized test suite tree** in the Test Explorer
 - **Real-time status bar** showing test execution progress
 - **Jest support** with automatic framework detection
+- **PHPUnit support** for efficient PHP testing (Laravel compatible)
 
 ## Installation
 
@@ -38,7 +40,8 @@ src/
 ├── extension.ts           # Extension entry point
 ├── types/                 # TypeScript type definitions
 ├── adapters/              # Framework-specific adapters
-│   └── jest/              # Jest adapter implementation
+│   ├── jest/              # Jest adapter implementation
+│   └── phpunit/           # PHPUnit adapter implementation
 ├── discovery/             # Test discovery components
 ├── execution/             # Test execution components
 └── ui/                    # UI components (status bar)
@@ -48,6 +51,7 @@ src/
 
 - [Mental Model](docs/mental-model.md) - Architecture and key concepts
 - [Test Orchestrator](docs/test-orchestrator.md) - How test orchestration works
+- [PHPUnit Support](docs/phpunit.md) - Using Testr with PHP/Laravel
 
 ## Development
 

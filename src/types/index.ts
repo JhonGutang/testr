@@ -11,7 +11,8 @@ export enum TestStatus {
 export enum TestFramework {
     Jest = 'jest',
     Vitest = 'vitest',
-    Mocha = 'mocha'
+    Mocha = 'mocha',
+    Phpunit = 'phpunit'
 }
 
 export interface TestLocation {

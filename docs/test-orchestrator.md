@@ -98,6 +98,10 @@ For Jest, detection checks:
 1. `jest` in `dependencies` or `devDependencies`
 2. Presence of `jest.config.js` or similar
 
+For PHPUnit, detection checks:
+1. Presence of `phpunit.xml` or `phpunit.xml.dist`
+2. Presence of `vendor/bin/phpunit`
+
 ### Step 3: Find Test Files
 
 Using VS Code's `workspace.findFiles` with `node_modules` exclusion:
@@ -107,7 +111,8 @@ const patterns = [
     '**/*.test.ts',
     '**/*.spec.ts',
     '**/*.test.js',
-    '**/*.spec.js'
+    '**/*.spec.js',
+    '**/*Test.php'
 ];
 
 const excludePattern = '**/node_modules/**';
