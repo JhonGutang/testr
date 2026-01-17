@@ -3,6 +3,7 @@ import * as cp from 'child_process';
 import * as path from 'path';
 import { TestRunResult, TestExecutionResult, TestStatus } from '../../types';
 import { JEST_BIN_PATHS } from '../../config';
+import { OutputLogger } from '../../ui/OutputLogger';
 
 interface JestTestResult {
     ancestorTitles: string[];
@@ -13,8 +14,8 @@ interface JestTestResult {
 }
 
 interface JestTestSuiteResult {
-    testFilePath: string;
-    testResults: JestTestResult[];
+    name: string;
+    assertionResults: JestTestResult[];
 }
 
 interface JestJsonOutput {
@@ -27,6 +28,11 @@ interface JestJsonOutput {
 }
 
 export class JestRunner {
+    private readonly outputLogger: OutputLogger;
+
+    constructor(outputLogger: OutputLogger) {
+        this.outputLogger = outputLogger;
+    }
     async runTests(
         workspaceFolder: vscode.WorkspaceFolder,
         testIds: ReadonlyArray<string>,
@@ -36,6 +42,7 @@ export class JestRunner {
         const jestPath = await this.findJestExecutable(workspacePath);
 
         if (!jestPath) {
+            this.outputLogger.logError('Jest executable not found');
             return this.createEmptyResult();
         }
 
@@ -45,7 +52,8 @@ export class JestRunner {
         return new Promise<TestRunResult>((resolve) => {
             console.log('[Testr] Spawning Jest:', jestPath, args.join(' '));
             console.log('[Testr] Working directory:', workspacePath);
-            
+            this.outputLogger.logInfo(`Executing Jest with ${testPatterns.length} test pattern(s)`);
+
             const process = cp.spawn(jestPath, args, {
                 cwd: workspacePath,
                 shell: true,
@@ -71,7 +79,9 @@ export class JestRunner {
             process.on('close', (code) => {
                 console.log('[Testr] Jest exited with code:', code);
                 console.log('[Testr] stdout length:', stdout.length);
-                console.log('[Testr] stderr:', stderr.substring(0, 500));
+                console.log('[Testr] stderr length:', stderr.length);
+                console.log('[Testr] stderr (first 500 chars):', stderr.substring(0, 500));
+                console.log('[Testr] stdout (full):', stdout);
                 cancelHandler.dispose();
                 const result = this.parseJestOutput(stdout, testIds);
                 console.log('[Testr] Parsed results:', result.passed, 'passed,', result.failed, 'failed');
@@ -111,10 +121,15 @@ export class JestRunner {
         return testIds.map(id => {
             const parts = id.split('::');
             if (parts.length > 1) {
-                return parts.slice(1).join(' ');
+                const pattern = parts.slice(1).join(' ');
+                return this.escapeRegexPattern(pattern);
             }
             return '';
         }).filter(pattern => pattern.length > 0);
+    }
+
+    private escapeRegexPattern(pattern: string): string {
+        return pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     private buildJestArgs(testPatterns: string[]): string[] {
@@ -135,19 +150,28 @@ export class JestRunner {
         try {
             const jsonMatch = stdout.match(/\{[\s\S]*\}/);
             if (!jsonMatch) {
+                console.log('[Testr] No JSON found in stdout');
                 return this.createEmptyResult();
             }
 
+            console.log('[Testr] Found JSON, attempting to parse...');
             const jestOutput = JSON.parse(jsonMatch[0]) as JestJsonOutput;
+            console.log('[Testr] JSON parsed successfully');
+            console.log('[Testr] Test results count:', jestOutput.testResults?.length || 0);
+            console.log('[Testr] Total tests:', jestOutput.numTotalTests);
+
             const results: TestExecutionResult[] = [];
 
             for (const suiteResult of jestOutput.testResults) {
-                for (const testResult of suiteResult.testResults) {
+                console.log('[Testr] Processing suite:', suiteResult.name, 'with', suiteResult.assertionResults?.length || 0, 'tests');
+                for (const testResult of suiteResult.assertionResults) {
                     const testId = this.buildTestId(
-                        suiteResult.testFilePath,
+                        suiteResult.name,
                         testResult.ancestorTitles,
                         testResult.title
                     );
+
+                    console.log('[Testr] Built test ID:', testId, 'for test:', testResult.title);
 
                     results.push({
                         testId,
@@ -159,6 +183,8 @@ export class JestRunner {
                 }
             }
 
+            console.log('[Testr] Total results created:', results.length);
+
             return {
                 passed: jestOutput.numPassedTests,
                 failed: jestOutput.numFailedTests,
@@ -166,7 +192,9 @@ export class JestRunner {
                 duration: results.reduce((sum, r) => sum + r.duration, 0),
                 results
             };
-        } catch {
+        } catch (error) {
+            console.log('[Testr] Error parsing Jest output:', error);
+            console.log('[Testr] Error message:', error instanceof Error ? error.message : String(error));
             return this.createEmptyResult();
         }
     }

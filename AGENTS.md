@@ -12,3 +12,4 @@ More than just a test adapter, Testr is a cross-language test orchestration plat
 1. codes must be strictly typed
 2. must adhere to clean code principles especially names
 3. Do not add comments if its not that complex. 
+4. Update/Create docs if needed

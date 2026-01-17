@@ -100,7 +100,7 @@ For Jest, detection checks:
 
 ### Step 3: Find Test Files
 
-Using VS Code's `workspace.findFiles`:
+Using VS Code's `workspace.findFiles` with `node_modules` exclusion:
 
 ```typescript
 const patterns = [
@@ -110,13 +110,17 @@ const patterns = [
     '**/*.spec.js'
 ];
 
+const excludePattern = '**/node_modules/**';
+
 for (const pattern of patterns) {
-    const files = await workspace.findFiles(
-        new RelativePattern(testFolder, pattern)
-    );
+    const relativePattern = new RelativePattern(testFolder, pattern);
+    const files = await workspace.findFiles(relativePattern, excludePattern);
     testFiles.push(...files);
 }
 ```
+
+> [!NOTE]
+> The `node_modules` directory is explicitly excluded to prevent discovering tests in dependencies, which improves performance and avoids false positives.
 
 ### Step 4: Parse Files
 
@@ -202,32 +206,50 @@ function collectTestItems(request: TestRunRequest): TestItem[] {
 
 ### Step 3: Build Patterns
 
-Convert TestItem IDs to test name patterns:
+Convert TestItem IDs to test name patterns with validation and filtering:
 
 ```typescript
 function buildTestPatterns(testIds: string[]): string[] {
+    if (testIds.length === 0) {
+        return [];
+    }
+    
     return testIds.map(id => {
         // 'file_path::Suite::Test' → 'Suite Test'
         const parts = id.split('::');
-        return parts.slice(1).join(' ');
-    });
+        if (parts.length > 1) {
+            return parts.slice(1).join(' ');
+        }
+        return '';
+    }).filter(pattern => pattern.length > 0);  // Remove empty patterns
 }
 ```
 
+> [!IMPORTANT]
+> Empty patterns are filtered out to prevent invalid Jest arguments. This handles edge cases where test IDs might not have the expected structure.
+
 ### Step 4: Spawn Process
 
-Execute Jest with JSON output:
+Execute Jest with JSON output and shell-safe arguments:
 
 ```typescript
-const process = spawn(jestPath, [
-    '--json',
-    '--testLocationInResults',
-    '--testNamePattern', patterns.join('|')
-], {
+const args = ['--json', '--testLocationInResults'];
+
+if (patterns.length > 0) {
+    const pattern = patterns.join('|');
+    // Quote the pattern for shell safety
+    args.push('--testNamePattern', `"${pattern}"`);
+}
+
+const process = spawn(jestPath, args, {
     cwd: workspacePath,
+    shell: true,  // Required for quoted arguments
     env: { ...process.env, CI: 'true' }
 });
 ```
+
+> [!WARNING]
+> The test name pattern is wrapped in quotes to handle special characters and spaces in test names. The `shell: true` option is required for proper quote handling.
 
 ### Step 5: Capture Output
 
@@ -269,24 +291,46 @@ for (const suiteResult of jestOutput.testResults) {
 
 ### Step 1: Map Results
 
-Match results to TestItems by ID:
+Match results to TestItems by ID with case-insensitive comparison:
 
 ```typescript
 function findTestItem(testId: string): TestItem | undefined {
-    // Navigate the TestItem tree using ID parts
+    // Normalize for case-insensitive comparison (Windows drive letters)
+    const normalizedTestId = testId.toLowerCase();
     const parts = testId.split('::');
-    let current = testController.items;
+    let currentItems = testController.items;
+    let result: TestItem | undefined;
     
-    for (const part of parts) {
-        const item = current.get(part);
-        if (item) {
-            current = item.children;
+    for (let i = 0; i < parts.length; i++) {
+        const partialId = parts.slice(0, i + 1).join('::');
+        const normalizedPartialId = partialId.toLowerCase();
+        let foundItem: TestItem | undefined;
+        
+        currentItems.forEach(item => {
+            // Case-insensitive comparison for Windows compatibility
+            const normalizedItemId = item.id.toLowerCase();
+            if (normalizedItemId === normalizedPartialId || 
+                normalizedItemId === normalizedTestId) {
+                foundItem = item;
+            }
+        });
+        
+        if (foundItem) {
+            result = foundItem;
+            if (foundItem.children.size > 0) {
+                currentItems = foundItem.children;
+            } else {
+                return foundItem;
+            }
         }
     }
     
-    return foundItem;
+    return result;
 }
 ```
+
+> [!IMPORTANT]
+> **Windows Compatibility**: Test IDs are compared case-insensitively to handle Windows drive letter casing differences (e.g., `C:` vs `c:`). This prevents test result matching failures on Windows systems.
 
 ### Step 2: Update TestItems
 
@@ -318,6 +362,77 @@ statusBar.showResults(
 );
 // Shows: "✗ 1/6 failed" with red background
 ```
+
+### Step 4: Log Detailed Results
+
+The `OutputLogger` provides comprehensive test execution logging:
+
+```typescript
+// Discovery logging
+outputLogger.logDiscoveryStart(folderName);
+outputLogger.logDiscoveredFile(filePath, testCount);
+outputLogger.logDiscoveryComplete(totalFiles, totalTests);
+
+// Execution logging
+outputLogger.logExecutionStart(testCount);
+outputLogger.logTestFile(filePath);
+outputLogger.logTestResult(testName, 'passed', duration);
+outputLogger.logTestResult(testName, 'failed', duration);
+outputLogger.logTestError(testName, errorMessage);
+
+// Statistics logging
+outputLogger.logFileStats(filePath, total, passed, failed, skipped);
+outputLogger.logOverallStats(total, passed, failed, skipped, duration);
+```
+
+**Example Output:**
+```
+[Testr] 🔍 Discovering tests in: MyProject
+[Testr]   ✓ src/utils/math.test.ts (3 tests)
+[Testr]   ✓ src/components/Button.test.tsx (5 tests)
+[Testr] ✅ Discovery complete: 2 files, 8 tests
+
+[Testr] 🚀 Running 8 tests...
+[Testr] 📄 src/utils/math.test.ts
+[Testr]   ✓ add() should sum two numbers (12ms)
+[Testr]   ✗ divide() should handle division by zero (8ms)
+[Testr]     Error: Expected error to be thrown
+[Testr]   ○ multiply() is pending
+[Testr]   Stats: 3 total (1 passed, 1 failed, 1 skipped)
+
+[Testr] 📊 Overall: 8 total (5 passed, 2 failed, 1 skipped) in 156ms
+```
+
+> [!TIP]
+> The OutputLogger writes to the "Testr" output channel in VS Code. Users can view detailed test execution logs by opening the Output panel and selecting "Testr" from the dropdown.
+
+### Step 5: Auto-Clear Passed Tests
+
+Passed test results are automatically cleared after a delay:
+
+```typescript
+private readonly passedResultClearDelayMs = 5000; // 5 seconds
+private clearResultsTimeout: ReturnType<typeof setTimeout> | undefined;
+
+// After test run completes
+if (passedItems.length > 0) {
+    this.clearResultsTimeout = setTimeout(() => {
+        this.invalidatePassedItems(passedItems);
+    }, this.passedResultClearDelayMs);
+}
+
+private invalidatePassedItems(items: TestItem[]): void {
+    // Create a new test run to clear the state of passed items
+    const request = new TestRunRequest(items, undefined, undefined, false);
+    const run = testController.createTestRun(request, undefined, false);
+    // End immediately without setting any state - this clears the checkmarks
+    run.end();
+}
+```
+
+> [!NOTE]
+> **UX Enhancement**: This feature keeps the test explorer clean by removing green checkmarks after 5 seconds, making it easier to spot which tests were just run. Failed tests remain visible until the next run.
+
 
 ---
 

@@ -9,15 +9,16 @@ import {
 import { JEST_CONFIG_FILES, JEST_TEST_PATTERNS } from '../../config';
 import { JestParser } from './JestParser';
 import { JestRunner } from './JestRunner';
+import { OutputLogger } from '../../ui/OutputLogger';
 
 export class JestAdapter implements TestFrameworkAdapter {
     readonly framework = TestFramework.Jest;
     private readonly parser: JestParser;
     private readonly runner: JestRunner;
 
-    constructor() {
+    constructor(outputLogger: OutputLogger) {
         this.parser = new JestParser();
-        this.runner = new JestRunner();
+        this.runner = new JestRunner(outputLogger);
     }
 
     async detectFramework(
