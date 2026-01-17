@@ -49,7 +49,13 @@ export class TestExecutionManager {
         const testIds = testItems.map(item => item.id);
         const passedItems: vscode.TestItem[] = [];
 
+        // Determine if this is a single test suite run or run all
+        // A single test suite run is when request.include is specified and all tests belong to the same file
+        const isSingleSuiteRun = this.isSingleTestSuiteRun(request, testItems);
+        const targetFilePath = isSingleSuiteRun ? this.getTargetFilePath(testItems) : null;
+
         console.log('[TestExecutionManager] Running', testItems.length, 'tests');
+        console.log('[TestExecutionManager] Is single suite run:', isSingleSuiteRun, 'Target file:', targetFilePath);
         
         // Log execution start
         this.outputLogger.logExecutionStart(testItems.length);
@@ -92,6 +98,12 @@ export class TestExecutionManager {
 
                 // Log results per file
                 for (const [filePath, fileResults] of resultsByFile) {
+                    // Skip files that are not the target when running a single suite
+                    if (isSingleSuiteRun && targetFilePath && !this.isMatchingFilePath(filePath, targetFilePath)) {
+                        console.log('[TestExecutionManager] Skipping file (not target):', filePath);
+                        continue;
+                    }
+
                     console.log('[TestExecutionManager] Processing file:', filePath, 'with', fileResults.length, 'results');
                     this.outputLogger.logTestFile(filePath);
                     
@@ -145,15 +157,17 @@ export class TestExecutionManager {
                     this.outputLogger.logFileStats(filePath, fileTotal, filePassed, fileFailed, fileSkipped);
                 }
 
-                // Log overall stats
-                const totalTests = result.passed + result.failed + result.skipped;
-                this.outputLogger.logOverallStats(
-                    totalTests,
-                    result.passed,
-                    result.failed,
-                    result.skipped,
-                    result.duration
-                );
+                // Log overall stats only when running all tests (not a single suite)
+                if (!isSingleSuiteRun) {
+                    const totalTests = result.passed + result.failed + result.skipped;
+                    this.outputLogger.logOverallStats(
+                        totalTests,
+                        result.passed,
+                        result.failed,
+                        result.skipped,
+                        result.duration
+                    );
+                }
 
                 this.statusBar.showResults(
                     result.passed,
@@ -234,6 +248,46 @@ export class TestExecutionManager {
                 this.collectItemsRecursively(child, collected);
             });
         }
+    }
+
+    /**
+     * Determines if this is a single test suite (file) run.
+     * A single test suite run is when:
+     * 1. request.include is specified (user selected specific tests)
+     * 2. All selected tests belong to the same file
+     */
+    private isSingleTestSuiteRun(request: vscode.TestRunRequest, testItems: vscode.TestItem[]): boolean {
+        // If no specific tests were requested, it's a "run all" scenario
+        if (!request.include || request.include.length === 0) {
+            return false;
+        }
+
+        // Get unique file paths from all test items
+        const filePaths = new Set<string>();
+        for (const item of testItems) {
+            const filePath = this.extractFilePathFromTestId(item.id);
+            filePaths.add(filePath.toLowerCase()); // Normalize for Windows
+        }
+
+        // It's a single suite run if all tests come from the same file
+        return filePaths.size === 1;
+    }
+
+    /**
+     * Gets the target file path from the test items (for single suite runs).
+     */
+    private getTargetFilePath(testItems: vscode.TestItem[]): string | null {
+        if (testItems.length === 0) {
+            return null;
+        }
+        return this.extractFilePathFromTestId(testItems[0].id);
+    }
+
+    /**
+     * Checks if two file paths match (case-insensitive for Windows compatibility).
+     */
+    private isMatchingFilePath(path1: string, path2: string): boolean {
+        return path1.toLowerCase() === path2.toLowerCase();
     }
 
     private findTestItem(testId: string): vscode.TestItem | undefined {

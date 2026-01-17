@@ -365,42 +365,54 @@ statusBar.showResults(
 
 ### Step 4: Log Detailed Results
 
-The `OutputLogger` provides comprehensive test execution logging:
+The `OutputLogger` provides comprehensive test execution logging. The logging behavior adapts based on the scope of the test run:
+
+1. **Run All Tests**: Logs details for every file and displays a summary of overall statistics at the end.
+2. **Run Single Suite**: Logs details *only* for the targeted test file and suppresses the overall statistics to reduce noise.
 
 ```typescript
-// Discovery logging
-outputLogger.logDiscoveryStart(folderName);
-outputLogger.logDiscoveredFile(filePath, testCount);
-outputLogger.logDiscoveryComplete(totalFiles, totalTests);
-
 // Execution logging
 outputLogger.logExecutionStart(testCount);
-outputLogger.logTestFile(filePath);
-outputLogger.logTestResult(testName, 'passed', duration);
-outputLogger.logTestResult(testName, 'failed', duration);
-outputLogger.logTestError(testName, errorMessage);
 
-// Statistics logging
-outputLogger.logFileStats(filePath, total, passed, failed, skipped);
-outputLogger.logOverallStats(total, passed, failed, skipped, duration);
+// For each test file:
+if (isTargetFileOrRunAll) {
+    outputLogger.logTestFile(filePath);
+    // ... log individual test results ...
+    outputLogger.logFileStats(filePath, total, passed, failed, skipped);
+}
+
+// Statistics logging (only for "Run All")
+if (!isSingleSuiteRun) {
+    outputLogger.logOverallStats(total, passed, failed, skipped, duration);
+}
 ```
 
-**Example Output:**
+**Example Output (Run All):**
 ```
-[Testr] 🔍 Discovering tests in: MyProject
-[Testr]   ✓ src/utils/math.test.ts (3 tests)
-[Testr]   ✓ src/components/Button.test.tsx (5 tests)
-[Testr] ✅ Discovery complete: 2 files, 8 tests
-
 [Testr] 🚀 Running 8 tests...
+[Testr] 📄 src/utils/math.test.ts
+[Testr]   ✓ add() should sum two numbers (12ms)
+...
+[Testr]   Stats: 3 total (1 passed, 1 failed, 1 skipped)
+
+[Testr] 📄 src/components/Button.test.tsx
+...
+[Testr]   Stats: 5 total (5 passed, 0 failed, 0 skipped)
+
+[Testr] 📊 Overall: 8 total (6 passed, 1 failed, 1 skipped) in 156ms
+```
+
+**Example Output (Run Single Suite):**
+```
+[Testr] 🚀 Running 3 tests...
 [Testr] 📄 src/utils/math.test.ts
 [Testr]   ✓ add() should sum two numbers (12ms)
 [Testr]   ✗ divide() should handle division by zero (8ms)
 [Testr]     Error: Expected error to be thrown
 [Testr]   ○ multiply() is pending
-[Testr]   Stats: 3 total (1 passed, 1 failed, 1 skipped)
 
-[Testr] 📊 Overall: 8 total (5 passed, 2 failed, 1 skipped) in 156ms
+[Testr]   Stats for src/utils/math.test.ts:
+[Testr]     Total: 3 | Passed: 1 | Failed: 1 | Skipped: 1
 ```
 
 > [!TIP]
